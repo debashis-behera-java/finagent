@@ -1,0 +1,44 @@
+# --- Build artifacts ---
+backend/target/
+target/
+frontend/node_modules/
+frontend/dist/
+
+# --- IDE ---
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Environment & secrets (never commit) ---
+.env
+*.env
+!.env.example
+
+# --- Logs ---
+*.log
+
+# --- Generated reports (Phase 10) ---
+backend/reports/
+
+# --- Local databases (never commit) ---
+*.db
+*.sqlite
+*.sqlite3
+*.mv.db
+*.trace.db
+
+# --- Local inspection helpers (dev-machine only, not project source) ---
+inspect*.ps1
+
+# --- Local test-run logs and helper scripts (dev-machine only) ---
+backend/*-out.txt
+backend/*-err.txt
+backend/run-*.bat

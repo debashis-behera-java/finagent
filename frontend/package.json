@@ -1,0 +1,32 @@
+{
+  "name": "finagent-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "FinAgent React research dashboard (Phase 11) — presentation only, no business logic",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.30.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.1.12",
+    "@testing-library/jest-dom": "6.6.3",
+    "@testing-library/react": "16.1.0",
+    "@testing-library/user-event": "14.5.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "5.2.0",
+    "jsdom": "25.0.1",
+    "tailwindcss": "4.1.12",
+    "typescript": "5.6.3",
+    "vite": "7.3.6",
+    "vitest": "3.2.7"
+  }
+}

@@ -1,0 +1,120 @@
+# ============================================================
+# FINAGENT — CI quality gate (Phase 14)
+#
+# Triggers: push to main + pull requests targeting main.
+# Jobs (backend/frontend in parallel, docker after both):
+#   backend  — mvn clean verify -Ppostgres-integration (unit + real
+#              Testcontainers PostgreSQL ITs, Flyway + validate)
+#   frontend — npm ci → npm test (Vitest) → npm run build (tsc + Vite)
+#   docker   — docker compose config + backend/frontend image builds
+#
+# CI only: builds and validates, never deploys, never pushes images.
+# No secrets required: stub providers + dummy (non-functional) AI key.
+# ============================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  backend:
+    name: backend (Java 21 + PostgreSQL/Testcontainers)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # Deterministic, offline-safe test configuration. Stub providers make
+      # no external calls; the dummy key only lets the Spring context load
+      # (any real synthesis call with it fails fast — never silently).
+      SPRING_AI_OPENAI_API_KEY: test-dummy-key-not-real
+      FINAGENT_MARKET_PROVIDER: stub
+      FINAGENT_NEWS_PROVIDER: stub
+      FINAGENT_MCP_ENABLED: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Backend verify (unit tests + PostgreSQL/Testcontainers ITs)
+        # Surefire runs the unit suite (H2, Flyway off); the
+        # postgres-integration profile additionally binds failsafe so the
+        # *IT suite boots real postgres:16-alpine via Testcontainers
+        # (Flyway V1-V4 applied, Hibernate validates). Needs no external
+        # PostgreSQL — Docker is preinstalled on GitHub-hosted runners.
+        run: mvn -B clean verify -Ppostgres-integration
+
+      - name: Upload Maven test reports (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: |
+            backend/target/surefire-reports/
+            backend/target/failsafe-reports/
+          if-no-files-found: warn
+
+  frontend:
+    name: frontend (Node 20 + Vitest + Vite build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Frontend tests (Vitest, mocked fetch — no backend needed)
+        run: npm test
+
+      - name: Production build (tsc type-check + Vite bundle)
+        run: npm run build
+
+      - name: Upload frontend build log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          if-no-files-found: warn
+
+  docker:
+    name: docker (Compose validation + image builds)
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Validate Docker Compose configuration
+        # Fails the job if docker-compose.yml is invalid.
+        run: docker compose config
+
+      - name: Build backend image (validation only, no push)
+        run: docker build ./backend
+
+      - name: Build frontend image (validation only, no push)
+        run: docker build ./frontend

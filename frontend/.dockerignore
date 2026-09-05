@@ -1,0 +1,10 @@
+# Frontend build context: ship only sources + manifests.
+node_modules/
+dist/
+.git/
+.idea/
+.vscode/
+*.log
+.DS_Store
+.env
+.env.local

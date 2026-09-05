@@ -1,0 +1,25 @@
+# ============================================================
+# FINAGENT - dev profile
+# Runs WITHOUT PostgreSQL: JPA auto-configuration is deferred
+# until Phase 2 (documented tradeoff, see PHASES.md).
+# ============================================================
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+
+# No database in dev: the research workflow beans + endpoints stay out of the
+# context (use the postgres profile for POST/GET /api/v1/research).
+# Phase 16: no database also means no users — the auth boundary stays out of
+# the context and the API remains open, exactly like before Phase 16.
+# NEVER use the dev profile for anything but local development.
+finagent:
+  research:
+    enabled: false
+  auth:
+    enabled: false
+
+logging:
+  level:
+    com.finagent: DEBUG

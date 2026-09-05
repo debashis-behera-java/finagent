@@ -1,0 +1,30 @@
+# ============================================================
+# FINAGENT — Dependabot (Phase 17)
+# Weekly dependency update checks. No auto-merge: every bump is reviewed
+# and must pass the CI quality gate (mvn verify + npm ci/test/build).
+# ============================================================
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, backend]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    labels: [dependencies, frontend]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels: [dependencies, ci]

@@ -1,0 +1,37 @@
+# ============================================================
+# FINAGENT - test profile
+# Repository/persistence tests run on in-memory H2 (no Docker on
+# this machine). Real PostgreSQL tests arrive in Phase 13 via
+# Testcontainers. Flyway is disabled here because V1__init.sql
+# is PostgreSQL-specific; Hibernate creates the schema instead.
+# ============================================================
+spring:
+
+  datasource:
+    url: jdbc:h2:mem:finagent;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+  # The OpenAI model starter (spring-ai-starter-model-openai) is on the classpath
+  # for later phases (Phase 7+). Its auto-configuration demands an API key at
+  # context-initialization time. All SpringBootTest classes here use stub providers
+  # (no real LLM calls), so a non-functional dummy key lets the context load.
+  # The real key is supplied via SPRING_AI_OPENAI_API_KEY in production.
+  ai:
+    openai:
+      api-key: test-dummy-key-not-real
+
+  # Phase 16: auth enforcement is ON in tests (unlike dev). The JWT secret is a
+  # non-secret test value — never valid for production (prod refuses it).
+finagent:
+  auth:
+    jwt-secret: test-only-jwt-secret-for-automated-tests-not-production-0123456789
+
+logging:
+  level:
+    com.finagent: INFO

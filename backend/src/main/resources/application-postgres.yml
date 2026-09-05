@@ -1,0 +1,22 @@
+# ============================================================
+# FINAGENT - postgres profile (Phase 2)
+# Real PostgreSQL 16 configuration. Activate with:
+#   SPRING_PROFILES_ACTIVE=postgres
+# Credentials come from environment variables (see .env.example).
+# Schema is owned by Flyway (db/migration/V1__init.sql); Hibernate
+# only validates the mapping (ddl-auto=validate).
+# ============================================================
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/finagent}
+    username: ${SPRING_DATASOURCE_USERNAME:finagent}
+    password: ${SPRING_DATASOURCE_PASSWORD:finagent}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration

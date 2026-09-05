@@ -1,0 +1,44 @@
+# ============================================================
+# FINAGENT - prod profile (Phase 16)
+# Real deployment settings. Activate with:
+#   SPRING_PROFILES_ACTIVE=prod
+# ALL secrets come from environment variables (see .env.example).
+# ProductionSecretValidator refuses startup with defaults/placeholders.
+# ============================================================
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  ai:
+    openai:
+      api-key: ${SPRING_AI_OPENAI_API_KEY}
+
+# Swagger fully off in production (OpenApiConfig bean + these switches
+# + the security chain deny rule = three layers).
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+finagent:
+  research:
+    enabled: true
+  auth:
+    enabled: true
+  swagger:
+    enabled: false
+
+logging:
+  level:
+    com.finagent: INFO

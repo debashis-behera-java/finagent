@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+/* Base refinements: visible focus everywhere, tabular figures for data. */
+:root {
+  color-scheme: light;
+}
+
+body {
+  font-feature-settings: "cv11", "ss01";
+}
+
+table {
+  font-variant-numeric: tabular-nums;
+}

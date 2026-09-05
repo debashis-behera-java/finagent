@@ -1,0 +1,127 @@
+# ============================================================
+# FINAGENT - base configuration (all profiles)
+# ============================================================
+spring:
+  application:
+    name: FINAGENT
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  jpa:
+    open-in-view: false
+  # --- Phase 5: MCP server (Streamable HTTP transport, served on the same HTTP port at /mcp) ---
+  ai:
+    mcp:
+      server:
+        name: finagent
+        version: 1.0.0
+        enabled: ${FINAGENT_MCP_ENABLED:true}
+        # STREAMABLE is the current MCP transport. The framework default (SSE) is deprecated.
+        protocol: STREAMABLE
+        request-timeout: 20s
+        capabilities:
+          tools: true
+          resources: false
+          prompts: false
+          completion: false
+        streamable-http:
+          mcp-endpoint: /mcp
+    # --- Phase 7: AI model (OpenAI chat model behind the research ChatClient) ---
+    # The API key comes ONLY from the SPRING_AI_OPENAI_API_KEY environment variable.
+    # The dummy default lets the app boot and all stub-backed tests run offline; any
+    # real synthesis call with the dummy key fails fast at call time, never silently.
+    openai:
+      api-key: ${SPRING_AI_OPENAI_API_KEY:test-dummy-key-not-real}
+      chat:
+        options:
+          model: ${FINAGENT_AI_MODEL:gpt-4o-mini}
+          temperature: ${FINAGENT_AI_TEMPERATURE:0.2}
+          max-tokens: ${FINAGENT_AI_MAX_TOKENS:800}
+  # --- Phase 2 (uncomment when PostgreSQL is available) ---
+  # datasource:
+  #   url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/finagent}
+  #   username: ${SPRING_DATASOURCE_USERNAME:finagent}
+  #   password: ${SPRING_DATASOURCE_PASSWORD:}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+finagent:
+  app:
+    name: ${FINAGENT_APP_NAME:FinAgent}
+    version: ${FINAGENT_APP_VERSION:1.0.0}
+    # Browser origins for /api/** (Phase 11 dashboard; comma-separated via env).
+    cors-allowed-origins: ${FINAGENT_CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  market:
+    provider: ${FINAGENT_MARKET_PROVIDER:stub}          # stub | alpha-vantage
+    base-url: ${FINAGENT_MARKET_BASE_URL:https://www.alphavantage.co}
+    api-key: ${ALPHA_VANTAGE_API_KEY:}                  # never hardcoded, env only
+    timeout: ${FINAGENT_MARKET_TIMEOUT:5s}
+    retry-attempts: ${FINAGENT_MARKET_RETRY_ATTEMPTS:3}
+    retry-backoff: ${FINAGENT_MARKET_RETRY_BACKOFF:500ms}
+  news:
+    provider: ${FINAGENT_NEWS_PROVIDER:stub}            # stub | newsapi
+    base-url: ${FINAGENT_NEWS_BASE_URL:https://newsapi.org}
+    api-key: ${NEWS_API_KEY:}                           # never hardcoded, env only
+    timeout: ${FINAGENT_NEWS_TIMEOUT:5s}
+    retry-attempts: ${FINAGENT_NEWS_RETRY_ATTEMPTS:2}
+    retry-backoff: ${FINAGENT_NEWS_RETRY_BACKOFF:500ms}
+  # --- Phase 6: deterministic risk engine ---
+  risk:
+    # Annual risk-free rate. Leave unset to keep the Sharpe ratio "unavailable"
+    # rather than fabricating a number. Example: 0.0425 = 4.25%.
+    risk-free-rate: ${FINAGENT_RISK_RISK_FREE_RATE:}
+    trading-days-per-year: ${FINAGENT_RISK_TRADING_DAYS_PER_YEAR:252}
+    min-observations: ${FINAGENT_RISK_MIN_OBSERVATIONS:2}
+    default-benchmark: ${FINAGENT_RISK_DEFAULT_BENCHMARK:SPY}
+    benchmark-provider: ${FINAGENT_RISK_BENCHMARK_PROVIDER:stub}
+  # --- Phase 7: AI research agent ---
+  ai:
+    model: ${FINAGENT_AI_MODEL:gpt-4o-mini}
+    temperature: ${FINAGENT_AI_TEMPERATURE:0.2}
+    max-tokens: ${FINAGENT_AI_MAX_TOKENS:800}
+    # Phase 17: hard bound on one synthesis call (hung model fails the job fast).
+    synthesis-timeout: ${FINAGENT_AI_SYNTHESIS_TIMEOUT:60s}
+  # --- Phase 8: research orchestration (bounded async executor, no broker) ---
+  research:
+    enabled: ${FINAGENT_RESEARCH_ENABLED:true}
+    core-pool-size: ${FINAGENT_RESEARCH_CORE_POOL_SIZE:2}
+    max-pool-size: ${FINAGENT_RESEARCH_MAX_POOL_SIZE:4}
+    queue-capacity: ${FINAGENT_RESEARCH_QUEUE_CAPACITY:50}
+  # --- Phase 9: news sentiment (lexicon baseline; thresholds + lexicon overridable) ---
+  sentiment:
+    positive-threshold: ${FINAGENT_SENTIMENT_POSITIVE_THRESHOLD:0.2}
+    negative-threshold: ${FINAGENT_SENTIMENT_NEGATIVE_THRESHOLD:-0.2}
+    confidence-hits: ${FINAGENT_SENTIMENT_CONFIDENCE_HITS:5}
+  # --- Phase 16: authentication boundary (JWT) ---
+  auth:
+    enabled: ${FINAGENT_AUTH_ENABLED:true}
+    # HS256 secret, min 32 bytes. Dev/test placeholder ONLY — the prod profile
+    # refuses to start with it (ProductionSecretValidator). Never commit a real one.
+    jwt-secret: ${FINAGENT_AUTH_JWT_SECRET:finagent-dev-only-jwt-secret-not-for-production-use-0123456789}
+    token-ttl: ${FINAGENT_AUTH_TOKEN_TTL:1h}
+    bcrypt-strength: ${FINAGENT_AUTH_BCRYPT_STRENGTH:10}
+  # --- Phase 16: Swagger surface (open in dev/test, closed in prod) ---
+  swagger:
+    enabled: ${FINAGENT_SWAGGER_ENABLED:true}
+  # --- Phase 16: in-memory fixed-window rate limits (single-instance only) ---
+  rate-limit:
+    auth-max-attempts: ${FINAGENT_RATELIMIT_AUTH_MAX:10}
+    auth-window: ${FINAGENT_RATELIMIT_AUTH_WINDOW:1m}
+    research-max-attempts: ${FINAGENT_RATELIMIT_RESEARCH_MAX:30}
+    research-window: ${FINAGENT_RATELIMIT_RESEARCH_WINDOW:1m}
+
+# Actuator: only health & info are exposed
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# OpenAPI / Swagger UI
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html

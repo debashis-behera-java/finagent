@@ -1,0 +1,7 @@
+# Backend build context: ship only what the image build needs.
+target/
+*.log
+.idea/
+.vscode/
+*.iml
+.DS_Store
