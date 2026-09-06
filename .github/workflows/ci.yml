@@ -47,11 +47,11 @@ jobs:
           cache: maven
 
       - name: Backend verify (unit tests + PostgreSQL/Testcontainers ITs)
-        # Surefire runs the unit suite (H2, Flyway off); the
-        # postgres-integration profile additionally binds failsafe so the
-        # *IT suite boots real postgres:16-alpine via Testcontainers
-        # (Flyway V1-V4 applied, Hibernate validates). Needs no external
-        # PostgreSQL — Docker is preinstalled on GitHub-hosted runners.
+      # Surefire runs the unit suite (H2, Flyway off); the
+      # postgres-integration profile additionally binds failsafe so the
+      # *IT suite boots real postgres:16-alpine via Testcontainers
+      # (Flyway V1-V5 applied, Hibernate validates). Needs no external
+      # PostgreSQL — Docker is preinstalled on GitHub-hosted runners.
         run: mvn -B clean verify -Ppostgres-integration
 
       - name: Upload Maven test reports (on failure)

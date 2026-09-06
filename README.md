@@ -345,15 +345,15 @@ Major capabilities:
 - Docker Compose local stack (config present)
 - GitHub Actions CI workflow (config present)
 
-Test totals (verified 2026-09-05): **393 total = 333 backend unit (surefire, H2) +
-42 frontend (Vitest) + 18 PostgreSQL/Testcontainers integration
-(`PostgresResearchIT` 12 + `PostgresAuthIT` 6)**.
+Test totals (verified 2026-09-05, incl. post-project hardening + verification): **437 total =
+377 backend unit (surefire, H2) + 42 frontend (Vitest) + 18 PostgreSQL/Testcontainers
+integration (`PostgresResearchIT` 12 + `PostgresAuthIT` 6)**.
 
 ### Locally verified
 
 | Item | Result |
 |---|---|
-| Backend `mvn clean verify` (default profile, H2) | PASS — 333 tests, 0 failures |
+| Backend `mvn clean verify` (default profile, H2) | PASS — 377 tests, 0 failures |
 | Frontend `npm test` (Vitest) | PASS — 42 tests, 8 files |
 | Frontend `npm run build` (`tsc` + Vite) | PASS |
 | PostgreSQL/Testcontainers IT sources | present and compile; container execution is Docker-gated (see below) |
@@ -366,6 +366,57 @@ Test totals (verified 2026-09-05): **393 total = 333 backend unit (surefire, H2)
 | Docker Compose stack | configured (`docker-compose.yml`, backend + frontend Dockerfiles); `docker compose` / image builds NOT executed locally |
 | GitHub Actions CI | workflow configured (`.github/workflows/ci.yml`); remote execution NOT yet performed |
 | Production deployment | NOT performed — no deployment target, no release |
+
+### Production hardening (post-project task 1, verified 2026-09-05)
+
+- Production profile (`SPRING_PROFILES_ACTIVE=prod`, `application-prod.yml`): fail-fast —
+  refuses to start without a real JWT secret (≥ 32 bytes, non-default), a real OpenAI key,
+  a non-default DB password, provider keys for non-stub providers, and now an explicit
+  non-localhost, non-wildcard `FINAGENT_CORS_ALLOWED_ORIGINS` list. Swagger is off in prod
+  (three layers: bean, properties, security-chain deny). Dev/test keep safe dummy defaults.
+- Security headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy: strict-origin-when-cross-origin` on API responses; HSTS
+  (`max-age=31536000, includeSubDomains`) on HTTPS responses. No CSP on the API (JSON only);
+  static-layer CSP/HSTS belong at the TLS terminator (the Compose nginx serves plain HTTP).
+- CORS: env-driven origin list on `/api/**`, GET/POST only, no wildcard;
+  credentials enabled (Task 3) so the browser sends/accepts the refresh cookie.
+- Auth: HS256 JWT (1h TTL via `FINAGENT_AUTH_TOKEN_TTL`), minimal claims, role taken
+  from the live user record; generic 401/403/429 JSON, no stack traces or secret material.
+- Refresh tokens (Tasks 2–3): login/register set an HttpOnly `finagent_rt` cookie
+  (`Secure` in prod, `SameSite=Lax`, `Path=/api/v1/auth`, `Max-Age` = TTL) and return
+  the access JWT with `refreshToken: null` in JSON — the raw refresh token never
+  appears in any body, log, or JS storage. `POST /api/v1/auth/refresh` rotates from
+  the cookie (single-use, 14d default via `FINAGENT_AUTH_REFRESH_TTL`); replaying a
+  consumed token is rejected and revokes the whole session family (reuse detection);
+  `POST /api/v1/auth/logout` revokes the family (idempotent) and clears the cookie.
+  Only SHA-256 hashes are stored (Flyway V5 `refresh_tokens`, unchanged — no new
+  migration); raw tokens never touch the DB or logs. Access JWTs expire and cannot
+  be revoked. Not OAuth2. A JSON-body token fallback remains for non-browser API
+  clients only; the SPA never uses it.
+- Refresh-token housekeeping (Task 4): scheduled bulk deletion of dead rows
+  past a 7d retention grace (`FINAGENT_AUTH_REFRESH_RETENTION`) — expired rows
+  (already unusable, tripwire spent) and old revoked rows only; used-but-live
+  rows are never touched so reuse detection is intact. Hourly by default
+  (`FINAGENT_AUTH_REFRESH_CLEANUP_INTERVAL`), pausable without restart
+  (`FINAGENT_AUTH_REFRESH_CLEANUP_ENABLED`, explicitly on in prod), failures
+  contained and logged by count (never token values/hashes). ADMIN-only
+  `GET /api/v1/admin/auth/sessions` exposes counts only
+  (`active/revoked/expired/families/lastCleanupAt/lastCleanupDeleted`) —
+  anonymous 401, USER 403. No schema migration (V1–V5 untouched), no Redis,
+  no JWT changes. Full details: `docs/security.md` §16.
+- Actuator: only `health`/`info` exposed; `env`/`beans`/`mappings`/`configprops`/dumps stay denied.
+- Rate limiting: in-memory fixed-window per instance (auth 10/min, research 30/min → 429);
+  multi-instance limiting needs Redis (future work, no new dependency added in this task).
+- Token storage: frontend keeps the short-lived access JWT in localStorage
+  (documented tradeoff in `frontend/src/api/client.ts` and `docs/security.md`
+  — not XSS-proof, not claimed immune); the long-lived refresh token is
+  HttpOnly-cookie-only (Task 3), invisible to JavaScript.
+
+Known production limitations / future work (not implemented): Redis-backed rate limiting,
+TLS termination + static-layer CSP, refresh-token cleanup job for expired rows,
+production deployment, Docker runtime verification
+(Docker unavailable on this machine), live trading/brokerage (explicitly out of scope —
+FinAgent is research-only).
 
 Phase 17 is the final engineering phase. There is no Phase 18.
 #   f i n a g e n t  

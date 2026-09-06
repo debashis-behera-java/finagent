@@ -6,6 +6,7 @@ import {
   fetchCurrentUser,
   getAccessToken,
   login as apiLogin,
+  logoutSession,
   register as apiRegister,
   setAccessToken,
 } from '../api/client';
@@ -16,7 +17,7 @@ interface AuthState {
   checking: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -66,7 +67,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(response.user);
   }, []);
 
-  const signOut = useCallback(() => {
+  /**
+   * Task 3: end the session. The server revokes the refresh-token family
+   * behind the HttpOnly cookie and clears that cookie; the local access JWT
+   * is dropped regardless (best-effort — a failed logout call still ends the
+   * local session, and the access JWT expires on its own within the hour).
+   * The refresh token itself is never touched here: it is cookie-only.
+   */
+  const signOut = useCallback(async () => {
+    try {
+      await logoutSession();
+    } catch {
+      // Best-effort: local session ends even if the backend is unreachable.
+    }
     clearAccessToken();
     setUser(null);
   }, []);

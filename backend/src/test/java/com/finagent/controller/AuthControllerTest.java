@@ -1,5 +1,6 @@
 package com.finagent.controller;
 
+import com.finagent.repository.RefreshTokenRepository;
 import com.finagent.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,9 @@ class AuthControllerTest {
     @Autowired
     private UserRepository users;
 
+    @Autowired
+    private RefreshTokenRepository refreshTokens;
+
     private String email;
     private String clientIp;
 
@@ -48,6 +52,8 @@ class AuthControllerTest {
     void freshIdentity() {
         email = "user-" + UUID.randomUUID() + "@example.com";
         clientIp = "10.0.0." + IP_SEQ.getAndIncrement();
+        // Task 2: refresh rows reference users — delete children first.
+        refreshTokens.deleteAll();
         users.deleteAll();
     }
 

@@ -150,6 +150,18 @@ public class GlobalExceptionHandler {
                         ex.getMessage(), request.getRequestURI()));
     }
 
+    @ExceptionHandler(com.finagent.auth.InvalidTokenException.class)
+    public ResponseEntity<ApiError> handleInvalidToken(com.finagent.auth.InvalidTokenException ex,
+                                                       HttpServletRequest request) {
+        // Generic by design: refresh failures never reveal whether a token
+        // exists, expired, was revoked, or was reused (reuse is signaled
+        // internally via the audit trail, not the response).
+        log.warn("401 {}: invalid credential", request.getRequestURI());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiError.of(HttpStatus.UNAUTHORIZED.value(), "Unauthorized",
+                        ex.getMessage(), request.getRequestURI()));
+    }
+
     @ExceptionHandler(com.finagent.auth.RateLimitExceededException.class)
     public ResponseEntity<ApiError> handleRateLimit(com.finagent.auth.RateLimitExceededException ex,
                                                     HttpServletRequest request) {

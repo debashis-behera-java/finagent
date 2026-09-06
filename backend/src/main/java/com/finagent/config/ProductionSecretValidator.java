@@ -14,8 +14,8 @@ import java.util.List;
  * {@code prod} profile — dev/test keep their safe dummy values.
  *
  * <p>Production MUST NOT start with the dev JWT secret, the dummy OpenAI key,
- * placeholder provider keys, or a default database password. Every failure
- * names the variable, NEVER its value.</p>
+ * placeholder provider keys, a default database password, or the dev CORS
+ * default (localhost). Every failure names the variable, NEVER its value.</p>
  */
 @Component
 @Profile("prod")
@@ -79,12 +79,41 @@ public class ProductionSecretValidator implements CommandLineRunner {
         return problems;
     }
 
+    /**
+     * Post-project hardening: production must use an explicit, non-localhost,
+     * non-wildcard CORS origin list. The dev default ({@code http://localhost:5173})
+     * would silently break a real deployment (browsers calling from the public
+     * origin would be rejected), so refuse to start with it. Pure logic —
+     * unit-tested without a Spring context. Never echoes origin values.
+     */
+    static List<String> validateCorsOrigins(List<String> origins) {
+        if (origins == null || origins.isEmpty()) {
+            return List.of("CORS allowed origins must be explicitly configured for production "
+                    + "(FINAGENT_CORS_ALLOWED_ORIGINS, no localhost, no wildcard)");
+        }
+        boolean bad = origins.stream().anyMatch(o -> {
+            if (o == null) {
+                return true;
+            }
+            String lower = o.strip().toLowerCase(java.util.Locale.ROOT);
+            return lower.isBlank() || lower.equals("*")
+                    || lower.contains("localhost") || lower.contains("127.0.0.1") || lower.contains("[::1]");
+        });
+        if (bad) {
+            return List.of("CORS allowed origins must be explicitly configured for production "
+                    + "(FINAGENT_CORS_ALLOWED_ORIGINS, no localhost, no wildcard)");
+        }
+        return List.of();
+    }
+
     private List<String> validate() {
-        return validateValues(
+        List<String> problems = new ArrayList<>(validateValues(
                 env.getProperty("FINAGENT_AUTH_JWT_SECRET", properties.getAuth().getJwtSecret()),
                 env.getProperty("SPRING_AI_OPENAI_API_KEY", ""),
                 env.getProperty("SPRING_DATASOURCE_PASSWORD", ""),
                 properties.getMarket().getProvider(), properties.getMarket().getApiKey(),
-                properties.getNews().getProvider(), properties.getNews().getApiKey());
+                properties.getNews().getProvider(), properties.getNews().getApiKey()));
+        problems.addAll(validateCorsOrigins(properties.getApp().getCorsAllowedOrigins()));
+        return problems;
     }
 }

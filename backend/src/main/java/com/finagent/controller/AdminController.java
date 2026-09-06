@@ -1,5 +1,7 @@
 package com.finagent.controller;
 
+import com.finagent.auth.RefreshTokenCleanupService;
+import com.finagent.dto.response.AuthDtos.SessionStatsDto;
 import com.finagent.dto.response.AuthDtos.UserDto;
 import com.finagent.model.AuditEvent;
 import com.finagent.model.AuditEventType;
@@ -31,10 +33,13 @@ public class AdminController {
 
     private final UserRepository users;
     private final AuditService audit;
+    private final RefreshTokenCleanupService sessions;
 
-    public AdminController(UserRepository users, AuditService audit) {
+    public AdminController(UserRepository users, AuditService audit,
+                           RefreshTokenCleanupService sessions) {
         this.users = users;
         this.audit = audit;
+        this.sessions = sessions;
     }
 
     @GetMapping("/users")
@@ -50,5 +55,22 @@ public class AdminController {
         return users.findAll().stream()
                 .map(u -> new UserDto(u.getId(), u.getEmail(), u.getRole(), u.getCreatedAt()))
                 .toList();
+    }
+
+    @GetMapping("/auth/sessions")
+    @Operation(summary = "Aggregate refresh-session statistics (ADMIN only; counts only, "
+            + "never token values or hashes)")
+    public SessionStatsDto sessionStats(@AuthenticationPrincipal UserDetails principal) {
+        UUID adminId = null;
+        try {
+            adminId = principal == null ? null : UUID.fromString(principal.getUsername());
+        } catch (IllegalArgumentException ex) {
+            adminId = null;
+        }
+        audit.record(AuditEventType.ADMIN_SESSION_STATS_VIEWED, adminId,
+                AuditEvent.Result.SUCCESS, "{}");
+        RefreshTokenCleanupService.SessionStats stats = sessions.stats();
+        return new SessionStatsDto(stats.active(), stats.revoked(), stats.expired(),
+                stats.families(), stats.lastCleanupAt(), stats.lastCleanupDeleted());
     }
 }

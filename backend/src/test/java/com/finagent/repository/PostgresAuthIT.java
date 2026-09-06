@@ -2,6 +2,7 @@ package com.finagent.repository;
 
 import com.finagent.model.AuditEvent;
 import com.finagent.model.AuditEventType;
+import com.finagent.model.RefreshToken;
 import com.finagent.model.Role;
 import com.finagent.model.User;
 import jakarta.persistence.EntityManager;
@@ -51,6 +52,9 @@ class PostgresAuthIT {
 
     @Autowired
     private AuditEventRepository auditEvents;
+
+    @Autowired
+    private RefreshTokenRepository refreshTokens;
 
     @Autowired
     private Flyway flyway;
@@ -129,5 +133,48 @@ class PostgresAuthIT {
                 "select count(*) from audit_events where result not in ('SUCCESS','FAILURE','DENIED')",
                 Integer.class);
         assertThat(violations).isZero();
+    }
+
+    /**
+     * Task 5: Flyway V5 creates the refresh_tokens table on real PostgreSQL —
+     * hash-only persistence round-trip, UNIQUE token_hash enforcement, and
+     * the expiry check constraint. Runs under
+     * {@code mvn verify -Ppostgres-integration} (Docker-gated).
+     */
+    @Test
+    void flywayAppliedRefreshTokenMigration() {
+        List<String> applied = Arrays.stream(flyway.info().applied())
+                .map(MigrationInfo::getVersion)
+                .map(Object::toString)
+                .toList();
+
+        assertThat(applied).contains("5");
+        assertThat(jdbc.queryForObject(
+                "select count(*) from refresh_tokens", Long.class)).isZero();
+    }
+
+    @Test
+    void refreshTokenRoundTripOnPostgres() {
+        User user = users.saveAndFlush(new User("rt-" + java.util.UUID.randomUUID() + "@example.com",
+                new BCryptPasswordEncoder().encode("Secret123"), Role.USER));
+        String hash = "0123456789abcdef".repeat(4);
+        RefreshToken saved = refreshTokens.saveAndFlush(new RefreshToken(user, hash,
+                java.util.UUID.randomUUID(), java.time.Instant.now().plusSeconds(3600)));
+        assertThat(saved.getId()).isNotNull();
+
+        em.clear();
+        RefreshToken found = refreshTokens.findByTokenHash(hash).orElseThrow();
+
+        assertThat(found.getTokenHash()).hasSize(64);
+        assertThat(found.getCreatedAt()).isNotNull();
+        assertThat(found.isActive(java.time.Instant.now())).isTrue();
+
+        // UNIQUE token_hash: a second row with the same hash is rejected.
+        User other = users.saveAndFlush(new User("rt2-" + java.util.UUID.randomUUID() + "@example.com",
+                new BCryptPasswordEncoder().encode("Secret123"), Role.USER));
+        assertThatThrownBy(() -> refreshTokens.saveAndFlush(
+                        new RefreshToken(other, hash, java.util.UUID.randomUUID(),
+                                java.time.Instant.now().plusSeconds(3600))))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 }

@@ -2,6 +2,7 @@ package com.finagent.controller;
 
 import com.finagent.model.Role;
 import com.finagent.model.User;
+import com.finagent.repository.RefreshTokenRepository;
 import com.finagent.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,8 +38,14 @@ class AdminSecurityTest {
     @Autowired
     private UserRepository users;
 
+    @Autowired
+    private RefreshTokenRepository refreshTokens;
+
     @BeforeEach
     void clean() {
+        // Task 2: refresh rows reference users — delete children first
+        // (H2 is shared across test classes in one JVM).
+        refreshTokens.deleteAll();
         users.deleteAll();
     }
 

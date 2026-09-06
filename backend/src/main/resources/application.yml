@@ -99,7 +99,17 @@ finagent:
     # refuses to start with it (ProductionSecretValidator). Never commit a real one.
     jwt-secret: ${FINAGENT_AUTH_JWT_SECRET:finagent-dev-only-jwt-secret-not-for-production-use-0123456789}
     token-ttl: ${FINAGENT_AUTH_TOKEN_TTL:1h}
+    refresh-token-ttl: ${FINAGENT_AUTH_REFRESH_TTL:14d}
     bcrypt-strength: ${FINAGENT_AUTH_BCRYPT_STRENGTH:10}
+    # Task 3: refresh-token HttpOnly cookie. Secure=false keeps plain-HTTP local
+    # development working; the prod profile forces Secure=true (HTTPS only).
+    cookie-secure: ${FINAGENT_AUTH_COOKIE_SECURE:false}
+    cookie-same-site: ${FINAGENT_AUTH_COOKIE_SAME_SITE:Lax}
+    # Task 4: refresh-token housekeeping (dead-row cleanup, no Redis).
+    refresh-token:
+      cleanup-enabled: ${FINAGENT_AUTH_REFRESH_CLEANUP_ENABLED:true}
+      cleanup-interval: ${FINAGENT_AUTH_REFRESH_CLEANUP_INTERVAL:1h}
+      retention: ${FINAGENT_AUTH_REFRESH_RETENTION:7d}
   # --- Phase 16: Swagger surface (open in dev/test, closed in prod) ---
   swagger:
     enabled: ${FINAGENT_SWAGGER_ENABLED:true}

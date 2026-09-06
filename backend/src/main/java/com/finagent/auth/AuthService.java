@@ -45,13 +45,15 @@ public class AuthService {
 
     private final UserRepository users;
     private final JwtService jwtService;
+    private final RefreshTokenService refreshTokens;
     private final PasswordEncoder passwordEncoder;
     private final AuditService audit;
 
-    public AuthService(UserRepository users, JwtService jwtService, FinAgentProperties properties,
-                       AuditService audit) {
+    public AuthService(UserRepository users, JwtService jwtService, RefreshTokenService refreshTokens,
+                       FinAgentProperties properties, AuditService audit) {
         this.users = users;
         this.jwtService = jwtService;
+        this.refreshTokens = refreshTokens;
         this.passwordEncoder = new BCryptPasswordEncoder(properties.getAuth().getBcryptStrength());
         this.audit = audit;
     }
@@ -76,7 +78,8 @@ public class AuthService {
     }
 
     /** Authenticate and issue a token. Generic failure — never reveals email existence. */
-    @Transactional(readOnly = true)
+    // Task 2: read-write (not read-only): successful login persists a refresh token.
+    @Transactional
     public AuthResult login(String email, String password) {
         String normalized = normalizeEmail(email);
         User user = users.findByEmail(normalized).orElse(null);
@@ -99,9 +102,38 @@ public class AuthService {
         return users.findById(id).orElseThrow(BadCredentialsException::new);
     }
 
+    /**
+     * Task 2: consume one refresh token and return a fresh token pair. The access
+     * JWT is minted here (claims unchanged); rotation itself lives in
+     * {@link RefreshTokenService}. Failures are generic (see that service).
+     */
+    // No rollback on business rejections: rotate() joins this transaction, and
+    // only the outermost definition governs rollback — the reuse revocation it
+    // performs must commit (see RefreshTokenService.rotate).
+    @Transactional(noRollbackFor = InvalidTokenException.class)
+    public AuthResult refresh(String rawRefreshToken) {
+        RefreshTokenService.Rotation rotation = refreshTokens.rotate(rawRefreshToken);
+        User user = rotation.user();
+        String accessToken = jwtService.createToken(user.getId(), user.getEmail(), user.getRole().name());
+        return new AuthResult(accessToken, jwtService.expiresInSeconds(),
+                rotation.refreshToken(), rotation.refreshExpiresIn(),
+                user.getId(), user.getEmail(), user.getRole(), user.getCreatedAt());
+    }
+
+    /**
+     * Task 2: revoke the session chain of the presented refresh token.
+     * Idempotent — unknown tokens succeed silently (no validity oracle).
+     */
+    @Transactional
+    public void logout(String rawRefreshToken) {
+        refreshTokens.logout(rawRefreshToken);
+    }
+
     private AuthResult toAuthResult(User user) {
         String token = jwtService.createToken(user.getId(), user.getEmail(), user.getRole().name());
+        RefreshTokenService.IssuedToken refresh = refreshTokens.issue(user);
         return new AuthResult(token, jwtService.expiresInSeconds(),
+                refresh.refreshToken(), refresh.refreshExpiresIn(),
                 user.getId(), user.getEmail(), user.getRole(), user.getCreatedAt());
     }
 
@@ -125,8 +157,8 @@ public class AuthService {
         }
     }
 
-    /** Token + public user view. Carries no password material. */
-    public record AuthResult(String token, long expiresIn, UUID userId, String email, Role role,
-                             java.time.Instant createdAt) {
+    /** Token pair + public user view. Carries no password material. */
+    public record AuthResult(String token, long expiresIn, String refreshToken, long refreshExpiresIn,
+                             UUID userId, String email, Role role, java.time.Instant createdAt) {
     }
 }

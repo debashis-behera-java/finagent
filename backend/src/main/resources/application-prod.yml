@@ -36,6 +36,15 @@ finagent:
     enabled: true
   auth:
     enabled: true
+    # Task 3: production serves HTTPS only — the refresh-token cookie must be
+    # Secure (browsers drop non-Secure cookies flagged SameSite=None, and
+    # Secure keeps the credential off plain-HTTP traffic entirely).
+    cookie-secure: true
+    # Task 4: housekeeping stays ON in production — stated explicitly so the
+    # feature can never be silently disabled by a missing default. An operator
+    # may still turn it off deliberately via FINAGENT_AUTH_REFRESH_CLEANUP_ENABLED=false.
+    refresh-token:
+      cleanup-enabled: true
   swagger:
     enabled: false
 

@@ -84,4 +84,30 @@ class ProductionSecretValidatorTest {
         assertThat(problems).hasSize(1);
         assertThat(problems.get(0)).contains("ALPHA_VANTAGE_API_KEY");
     }
+
+    @Test
+    void devLocalhostCorsOriginsAreRejected() {
+        List<String> problems = ProductionSecretValidator.validateCorsOrigins(
+                List.of("http://localhost:5173"));
+
+        assertThat(problems).hasSize(1);
+        assertThat(problems.get(0)).contains("FINAGENT_CORS_ALLOWED_ORIGINS");
+    }
+
+    @Test
+    void blankAndWildcardCorsOriginsAreRejected() {
+        assertThat(ProductionSecretValidator.validateCorsOrigins(List.of())).isNotEmpty();
+        assertThat(ProductionSecretValidator.validateCorsOrigins(null)).isNotEmpty();
+        assertThat(ProductionSecretValidator.validateCorsOrigins(List.of("*"))).isNotEmpty();
+        assertThat(ProductionSecretValidator.validateCorsOrigins(
+                List.of("https://app.example.com", "http://127.0.0.1:3000"))).isNotEmpty();
+    }
+
+    @Test
+    void explicitPublicCorsOriginsPass() {
+        List<String> problems = ProductionSecretValidator.validateCorsOrigins(
+                List.of("https://app.example.com"));
+
+        assertThat(problems).isEmpty();
+    }
 }

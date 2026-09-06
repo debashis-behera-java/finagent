@@ -47,7 +47,7 @@ export function Layout() {
                 <button
                   type="button"
                   onClick={() => {
-                    signOut();
+                    void signOut();
                     navigate('/login', { replace: true });
                   }}
                   className="rounded-md px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400"

@@ -291,3 +291,17 @@ hygiene re-verified. Full details: `docs/final-hardening.md`.
 Tests: 333 backend green (surefire), 42 frontend green, 18 PostgreSQL/Testcontainers
 ITs (CI/Docker-gated, unexecuted locally).
 STOP. Final engineering phase complete — no Phase 18.
+
+**Post-project Task 4 — Refresh-token housekeeping + session observability**
+(no auth-semantics change, no migration). Scheduled bulk DELETE of dead
+refresh-token rows past a 7d retention grace (expired rows whose replay
+tripwire is spent + old revoked rows; used-but-unexpired tripwires and live
+tokens never match), hourly on the default scheduler (no custom pool, no
+Redis), pausable via `finagent.auth.refresh-token.cleanup-enabled`
+(explicitly on in prod), failures contained and logged by count only.
+ADMIN-only `GET /api/v1/admin/auth/sessions` returns counts only
+(`active/revoked/expired/families/lastCleanupAt/lastCleanupDeleted`;
+401 anonymous, 403 USER). No V1–V5 change, no JWT/MCP/AI/risk/sentiment/PDF
+change, no frontend change. Tests: 409 backend green (16 new), 46 frontend
+green. Full details: `docs/security.md` §16.
+PostgreSQL/Docker runtime verification remains pending (Docker unavailable).

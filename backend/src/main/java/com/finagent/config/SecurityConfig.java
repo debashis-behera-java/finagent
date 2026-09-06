@@ -20,8 +20,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * the default for test/postgres/prod):</p>
  * <ul>
  *   <li>PUBLIC: {@code POST /api/v1/auth/register}, {@code POST /api/v1/auth/login},
- *   {@code GET /api/v1/health}, actuator {@code /health} (+{@code /info}), {@code /error},
- *   CORS preflights ({@code OPTIONS}).</li>
+ *   {@code POST /api/v1/auth/refresh}, {@code POST /api/v1/auth/logout} (all rate
+ *   limited), {@code GET /api/v1/health}, actuator {@code /health} (+{@code /info}),
+ *   {@code /error}, CORS preflights ({@code OPTIONS}).</li>
  *   <li>AUTHENTICATED (any role): {@code /api/v1/auth/me}, {@code /api/v1/stocks/**},
  *   {@code /api/v1/research/**}, {@code /mcp} (+{@code /mcp/**}).</li>
  *   <li>ADMIN only: {@code /api/v1/admin/**}.</li>
@@ -31,10 +32,14 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *
  * <p>When {@code finagent.auth.enabled=false} (DB-less dev profile — no users can
  * exist) the API stays open exactly like before Phase 16, with a loud startup
- * warning. Hardening notes: CSRF disabled because authentication is Bearer
- * tokens, never cookies (nothing for a forged cross-site request to present);
- * default security headers apply (nosniff, DENY framing, referrer policy);
- * no sessions are ever created.</p>
+ * warning. Hardening notes: CSRF protection stays disabled by configuration
+ * (deliberate — see Task 3 decision in {@code docs/security.md} §8: API
+ * authorization is Bearer tokens, while the refresh-token cookie is confined
+ * to POST-only auth endpoints under {@code SameSite=Lax}, so a forged
+ * cross-site request has no state-changing GET to abuse and browsers withhold
+ * the cookie on cross-site POSTs); default security headers apply (nosniff,
+ * DENY framing, referrer policy); HSTS is emitted on HTTPS responses
+ * (browsers ignore it over plain HTTP); no sessions are ever created.</p>
  */
 @Configuration
 @Slf4j
@@ -70,6 +75,11 @@ public class SecurityConfig {
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .logout(AbstractHttpConfigurer::disable)
                 .headers(headers -> headers
+                        // Post-project hardening: HSTS on HTTPS responses only
+                        // (Spring emits it solely for secure requests, so plain-HTTP
+                        // dev/test traffic and existing tests are unaffected).
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(true))
                         .referrerPolicy(referrer -> referrer.policy(
                                 org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)))
                 .exceptionHandling(eh -> eh
@@ -86,7 +96,8 @@ public class SecurityConfig {
         http.authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/error").permitAll()
-                .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login").permitAll()
+                .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login",
+                        "/api/v1/auth/refresh", "/api/v1/auth/logout").permitAll()
                 .requestMatchers("/api/v1/health").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")

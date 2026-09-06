@@ -161,10 +161,61 @@ public class FinAgentProperties {
          * development placeholder.
          */
         private String jwtSecret = "finagent-dev-only-jwt-secret-not-for-production-use-0123456789";
-        /** Access-token lifetime (short-lived; no refresh tokens). */
+        /** Access-token lifetime (short-lived; renewed via refresh tokens). */
         private Duration tokenTtl = Duration.ofHours(1);
+        /**
+          * Task 2: refresh-token lifetime (long-lived session credential, rotated
+          * on every use). Injected via FINAGENT_AUTH_REFRESH_TTL; the default below
+          * applies to dev/test — production may override it via the environment.
+          */
+        private Duration refreshTokenTtl = Duration.ofDays(14);
         /** BCrypt cost factor (4-31; 10 is the production-appropriate default). */
         private int bcryptStrength = 10;
+        /**
+          * Task 3: {@code Secure} flag for the refresh-token cookie. {@code false}
+          * by default so plain-HTTP local development (Vite proxy, H2 tests)
+          * keeps working — browsers would silently drop a {@code Secure} cookie
+          * over HTTP. FORCED to {@code true} in {@code application-prod.yml};
+          * production must always serve HTTPS anyway (HSTS is emitted there).
+          * Injected via FINAGENT_AUTH_COOKIE_SECURE.
+          */
+        private boolean cookieSecure = false;
+        /**
+          * Task 3: {@code SameSite} attribute for the refresh-token cookie
+          * ({@code Lax} or {@code Strict}; {@code None} only for genuine
+          * cross-site deployments, which additionally require
+          * {@code cookieSecure=true} or browsers reject the cookie).
+          * Default {@code Lax}: the SPA is same-origin in dev (Vite proxy) and
+          * same-site in the default production layout (reverse proxy or
+          * sibling origins), and the cookie-bearing endpoints are POST-only,
+          * so Lax already blocks cross-site presentation (see docs/security.md
+          * §8). Injected via FINAGENT_AUTH_COOKIE_SAME_SITE.
+          */
+        private String cookieSameSite = "Lax";
+        /**
+          * Task 4: refresh-token housekeeping policy (nested so the properties
+          * read {@code finagent.auth.refresh-token.*}, e.g.
+          * {@code finagent.auth.refresh-token.cleanup-enabled}).
+          */
+        private final RefreshTokenMaintenance refreshToken = new RefreshTokenMaintenance();
+    }
+
+    /**
+      * Task 4: refresh-token housekeeping knobs. Retention is a grace period:
+      * dead rows (expired, or revoked) are kept this long before the cleanup
+      * job deletes them, preserving forensic/audit usefulness and guaranteeing
+      * that no row which could still influence rotation or reuse detection is
+      * ever removed (see {@code RefreshTokenCleanupService} for the proof).
+      */
+    @Getter
+    @Setter
+    public static class RefreshTokenMaintenance {
+        /** Master switch for the scheduled cleanup job (checked every run). */
+        private boolean cleanupEnabled = true;
+        /** How often the cleanup job runs (fixed delay between runs). */
+        private Duration cleanupInterval = Duration.ofHours(1);
+        /** Grace period after expiry/revocation before a dead row is deleted. */
+        private Duration retention = Duration.ofDays(7);
     }
 
     /**

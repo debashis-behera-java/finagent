@@ -48,10 +48,14 @@ export function friendlyMessage(error: unknown): string {
 const TOKEN_KEY = 'finagent.accessToken';
 
 /**
- * Token storage tradeoff (documented in docs/security.md): localStorage keeps
- * the SPA simple and survives reloads, but any XSS payload could read the
- * token — so the app renders all content as React text (no HTML sinks) and
- * uses short-lived (1h) access tokens with no refresh mechanism.
+ * Token storage tradeoff (documented in docs/security.md §9-10): the
+ * short-lived access JWT (1h) stays in localStorage — simple and
+ * reload-proof, but readable by any XSS payload, so the app renders all
+ * content as React text (no HTML sinks). The long-lived refresh token is
+ * NEVER here: it lives only in the HttpOnly `finagent_rt` cookie, which
+ * JavaScript cannot read. This module never stores, sends manually, logs, or
+ * otherwise touches refresh tokens — the browser attaches the cookie
+ * automatically (see `credentials: 'include'` below).
  */
 export function getAccessToken(): string | null {
   try {
@@ -105,6 +109,24 @@ export async function fetchCurrentUser(): Promise<AuthUser> {
   return request<AuthUser>('/api/v1/auth/me');
 }
 
+/**
+ * Task 3: rotate the session via the HttpOnly refresh cookie. No token is
+ * sent from JavaScript — the browser attaches `finagent_rt` automatically
+ * and the server answers with a fresh access JWT plus a replacement cookie.
+ */
+export async function refreshSession(): Promise<AuthResponse> {
+  return request<AuthResponse>('/api/v1/auth/refresh', { method: 'POST' });
+}
+
+/**
+ * Task 3: end the server-side session family. The browser sends the refresh
+ * cookie; the server revokes the family and clears the cookie. 204 carries
+ * no body. Best-effort from the UI: local state clears regardless.
+ */
+export async function logoutSession(): Promise<void> {
+  return requestNoContent('/api/v1/auth/logout', { method: 'POST' });
+}
+
 async function request<T>(path: string, init?: RequestInit, timeoutMs = 15000): Promise<T> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -112,6 +134,10 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = 15000): 
   try {
     response = await fetch(`${baseUrl()}${path}`, {
       ...init,
+      // Task 3: cookies are the refresh-token transport — include them on
+      // auth calls (same-origin dev proxy; cross-origin prod via CORS
+      // allowCredentials). Harmless for Bearer-authenticated calls.
+      credentials: 'include',
       signal: controller.signal,
       headers: authHeaders(init),
     });
@@ -134,6 +160,38 @@ async function request<T>(path: string, init?: RequestInit, timeoutMs = 15000): 
     throw new ApiClientError(response.status, body?.message ?? `Request failed (HTTP ${response.status})`, body);
   }
   return (await response.json()) as T;
+}
+
+/** POST-style helper for endpoints that answer 204 No Content (e.g. logout). */
+async function requestNoContent(path: string, init?: RequestInit, timeoutMs = 15000): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl()}${path}`, {
+      ...init,
+      credentials: 'include',
+      signal: controller.signal,
+      headers: authHeaders(init),
+    });
+  } catch (error) {
+    clearTimeout(timer);
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new ApiClientError(0, 'The request timed out. The backend may be slow or unreachable.');
+    }
+    throw new ApiClientError(0, 'Cannot reach the FinAgent backend.');
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!response.ok) {
+    let body: ApiErrorBody | null = null;
+    try {
+      body = (await response.json()) as ApiErrorBody;
+    } catch {
+      body = null;
+    }
+    throw new ApiClientError(response.status, body?.message ?? `Request failed (HTTP ${response.status})`, body);
+  }
 }
 
 export interface CreateResearchInput {
@@ -172,6 +230,7 @@ export async function downloadResearchPdf(id: string, timeoutMs = 30000): Promis
     if (token) headers['Authorization'] = `Bearer ${token}`;
     response = await fetch(`${baseUrl()}/api/v1/research/${encodeURIComponent(id)}/report.pdf`, {
       signal: controller.signal,
+      credentials: 'include',
       headers,
     });
   } catch (error) {

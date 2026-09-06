@@ -35,12 +35,20 @@ class AuthServiceTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private RefreshTokenService refreshTokens;
+
     private AuthService authService;
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(users, new JwtService(new FinAgentProperties()),
+        authService = new AuthService(users, new JwtService(new FinAgentProperties()), refreshTokens,
                 new FinAgentProperties(), auditService);
+        // Task 2: login/register mint a refresh token; lenient so failure-path
+        // tests (which never reach issuance) stay strict-stub clean.
+        org.mockito.Mockito.lenient()
+                .when(refreshTokens.issue(any(User.class)))
+                .thenReturn(new RefreshTokenService.IssuedToken("raw-refresh-token", 1209600L));
     }
 
     @Test
@@ -62,6 +70,8 @@ class AuthServiceTest {
         assertThat(user.getPasswordHash()).isNotEqualTo("Secret123");
         assertThat(new BCryptPasswordEncoder().matches("Secret123", user.getPasswordHash())).isTrue();
         assertThat(result.token()).isNotBlank();
+        assertThat(result.refreshToken()).isEqualTo("raw-refresh-token");
+        assertThat(result.refreshExpiresIn()).isEqualTo(1209600L);
         assertThat(result.role()).isEqualTo(Role.USER);
     }
 
@@ -102,6 +112,7 @@ class AuthServiceTest {
         AuthService.AuthResult result = authService.login("analyst@example.com", "Secret123");
 
         assertThat(result.token()).isNotBlank();
+        assertThat(result.refreshToken()).isEqualTo("raw-refresh-token");
         assertThat(result.email()).isEqualTo("analyst@example.com");
     }
 
